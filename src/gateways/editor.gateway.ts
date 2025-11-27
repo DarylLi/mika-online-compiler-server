@@ -78,17 +78,29 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (user) {
       // 如果用户正在请求协助，结束协助请求
       if (user.isRequestingHelp) {
+        const curService = this.assistanceService.getAssistanceRequest(user.uuid);
+        if (curService.helperUuid) {
+          const helpBy = this.userService.getUserByUuid(curService.helperUuid);
+          if (helpBy) {
+            const curClient = this.clients.get(helpBy.socketId);
+            this.sendMessage(curClient, 'requester-leave', { success: true });
+          }
+        }
         this.assistanceService.endAssistance(user.uuid);
         this.broadcastAssistanceList();
       } else if (user.isJoiningHelp) {
         // 协作列表重新展示当前协作
         this.assistanceService.showAssistanceRequest(user.uuid);
         // 告知协作者跑路
-        const curServicce = this.assistanceService.getAssistanceRequestByHelper(user.uuid);
-        const helpTo = this.userService.getUserByUuid(curServicce.requesterUuid);
-        const curClient = this.clients.get(helpTo.socketId);
-        this.sendMessage(curClient, 'helper-leave', { success: true });
-        this.broadcastAssistanceList();
+        const curService = this.assistanceService.getAssistanceRequestByHelper(user.uuid);
+        if (curService) {
+          const helpTo = this.userService.getUserByUuid(curService.requesterUuid);
+          if (helpTo) {
+            const curClient = this.clients.get(helpTo.socketId);
+            this.sendMessage(curClient, 'helper-leave', { success: true });
+            this.broadcastAssistanceList();
+          }
+        }
       }
       // 移除用户
       this.userService.removeUser(socketId);
@@ -131,6 +143,9 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
         break;
       case 'get-assistance-list':
         this.handleGetAssistanceList(client);
+        break;
+      case 'stop-request':
+        this.endRequest(client, user);
         break;
       default:
         this.sendMessage(client, 'error', { message: '未知的事件类型' });
@@ -351,7 +366,13 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const list = this.assistanceService.getAssistanceRequests();
     this.sendMessage(client, 'assistance-list', list);
   }
-
+  /**
+   * 请求者结束请求
+   */
+  private endRequest(client: WebSocket, user: any): void {
+    this.assistanceService.endAssistance(user.uuid);
+    this.broadcastAssistanceList();
+  }
   /**
    * 广播协助列表给所有客户端
    */
