@@ -6,6 +6,13 @@
 
 本项目是一Mika-Online-Compiler在线编辑器的服务器，支持多用户在线协作编程。通过 WebSocket 实现实时通信，提供协助请求、内容同步、消息聊天等核心功能。
 
+## 接口功能预览
+<img width="1630" height="1202" alt="QQ_1764314879198" src="https://github.com/user-attachments/assets/caf2b300-7f68-4fed-86e0-587f186118c1" />
+<img width="2058" height="1132" alt="QQ_1764314914283" src="https://github.com/user-attachments/assets/a5cd07c5-4b7d-46c7-885b-22f0d795d2f1" />
+<img width="2472" height="1324" alt="QQ_1764314948929" src="https://github.com/user-attachments/assets/51701b9a-06bc-42ed-93db-c8b138c6b467" />
+
+
+
 ## 主要业务功能
 
 ### 1. 用户连接管理
