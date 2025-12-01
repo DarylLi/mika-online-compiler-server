@@ -1,19 +1,10 @@
-# Mika-Online-Compiler-Server 在线编辑器服务端
+# Mika 在线编译器服务器
 
 基于 NestJS 和 WebSocket 的在线编辑器协同编辑服务后端。
 
 ## 项目概述
 
-本项目是一Mika-Online-Compiler在线编辑器的服务器，支持多用户在线协作编程。通过 WebSocket 实现实时通信，提供协助请求、内容同步、消息聊天等核心功能。
-
-## 接口功能预览
-请求者视角：
-<img width="1630" height="1202" alt="QQ_1764314879198" src="https://github.com/user-attachments/assets/caf2b300-7f68-4fed-86e0-587f186118c1" />
-协助者视角：
-<img width="2058" height="1132" alt="QQ_1764314914283" src="https://github.com/user-attachments/assets/a5cd07c5-4b7d-46c7-885b-22f0d795d2f1" />
-<img width="2472" height="1324" alt="QQ_1764314948929" src="https://github.com/user-attachments/assets/51701b9a-06bc-42ed-93db-c8b138c6b467" />
-
-
+本项目是一个实时协同编辑服务器，支持多用户在线协作编程。通过 WebSocket 实现实时通信，提供协助请求、内容同步、消息聊天等核心功能。
 
 ## 主要业务功能
 
@@ -43,6 +34,158 @@
 - **内容同步**：协助者可以实时同步代码内容给请求者
 - **状态同步**：实时同步用户状态和协助状态
 - **多文件支持**：支持在多个文件之间切换和同步
+
+### 6. 文件下载服务
+- **文件生成**：接收 JS、CSS、HTML 内容并生成可下载文件
+- **下载链接**：自动生成唯一的下载链接
+- **文件管理**：支持文件信息查询和删除
+- **临时存储**：文件存储在服务器临时目录，支持自动清理
+
+## HTTP API 文档
+
+### 文件下载接口
+
+#### 1. 创建文件并获取下载链接
+
+**接口地址**：`POST /api/files`
+
+**请求头**：
+```
+Content-Type: application/json
+```
+
+**请求体**：
+
+| 属性 | 类型 | 默认值 | 必填 | 说明 |
+|------|------|--------|------|------|
+| content | string | - | 是 | 文件内容（JS、CSS 或 HTML 代码） |
+| type | string | - | 是 | 文件类型，可选值：`js`、`css`、`html` |
+| filename | string | - | 否 | 自定义文件名（不含扩展名），如果不提供则自动生成 |
+
+**请求示例**：
+```json
+{
+  "content": "console.log('Hello World');",
+  "type": "js",
+  "filename": "app"
+}
+```
+
+**响应示例**：
+```json
+{
+  "success": true,
+  "fileId": "550e8400-e29b-41d4-a716-446655440000",
+  "downloadUrl": "/api/files/550e8400-e29b-41d4-a716-446655440000/download",
+  "filename": "app.js",
+  "message": "文件创建成功"
+}
+```
+
+**响应字段说明**：
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| success | boolean | 操作是否成功 |
+| fileId | string | 文件唯一标识符 |
+| downloadUrl | string | 文件下载链接（相对路径） |
+| filename | string | 文件名（含扩展名） |
+| message | string | 操作消息 |
+
+**错误响应**：
+- `400 Bad Request`：内容为空、文件类型为空或不支持的文件类型
+- `500 Internal Server Error`：文件创建失败
+
+---
+
+#### 2. 下载文件
+
+**接口地址**：`GET /api/files/:fileId/download`
+
+**路径参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| fileId | string | 是 | 文件唯一标识符 |
+
+**请求示例**：
+```
+GET /api/files/550e8400-e29b-41d4-a716-446655440000/download
+```
+
+**响应**：
+- 返回文件内容，自动设置正确的 `Content-Type` 和 `Content-Disposition` 响应头
+- 浏览器会自动下载文件
+
+**Content-Type 映射**：
+- `js` → `application/javascript`
+- `css` → `text/css`
+- `html` → `text/html`
+
+**错误响应**：
+- `404 Not Found`：文件不存在或文件内容不存在
+
+---
+
+#### 3. 获取文件信息
+
+**接口地址**：`GET /api/files/:fileId/info`
+
+**路径参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| fileId | string | 是 | 文件唯一标识符 |
+
+**请求示例**：
+```
+GET /api/files/550e8400-e29b-41d4-a716-446655440000/info
+```
+
+**响应示例**：
+```json
+{
+  "success": true,
+  "fileId": "550e8400-e29b-41d4-a716-446655440000",
+  "filename": "app.js",
+  "contentType": "application/javascript",
+  "downloadUrl": "/api/files/550e8400-e29b-41d4-a716-446655440000/download",
+  "createdAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+**错误响应**：
+- `404 Not Found`：文件不存在
+
+---
+
+#### 4. 删除文件
+
+**接口地址**：`DELETE /api/files/:fileId`
+
+**路径参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| fileId | string | 是 | 文件唯一标识符 |
+
+**请求示例**：
+```
+DELETE /api/files/550e8400-e29b-41d4-a716-446655440000
+```
+
+**响应示例**：
+```json
+{
+  "success": true,
+  "message": "文件已删除"
+}
+```
+
+**错误响应**：
+- `404 Not Found`：文件不存在或已删除
+
+---
 
 ## WebSocket 事件文档
 
@@ -389,11 +532,19 @@ WebSocket 连接地址：`ws://localhost:3000`
 
 ## 注意事项
 
+### WebSocket 相关
 1. **分片传输**：当内容超过 10000 字符时，会自动分割为多个分片，客户端需要接收所有分片后重组
 2. **用户UUID**：每个连接的用户都会获得一个唯一的 UUID，用于标识用户
 3. **协助状态**：一个用户同时只能请求一次协助或加入一次协助
 4. **连接断开**：用户断开连接时，会自动清理相关资源并更新协助状态
 5. **错误处理**：所有错误都会通过 `error` 事件返回，客户端应监听此事件
+
+### 文件下载相关
+1. **文件存储**：文件存储在服务器的 `uploads` 目录中，文件名格式为 `{fileId}_{filename}`
+2. **文件清理**：建议定期清理过期文件，可通过 `FileService.cleanupOldFiles()` 方法实现
+3. **文件类型限制**：目前仅支持 `js`、`css`、`html` 三种文件类型
+4. **下载链接**：下载链接为相对路径，需要加上服务器地址（如：`http://localhost:3000/api/files/{fileId}/download`）
+5. **文件大小**：没有文件大小限制，但建议控制文件大小以避免服务器资源问题
 
 ## 许可证
 
