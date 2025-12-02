@@ -12,8 +12,8 @@ async function bootstrap() {
 
   // 启用 CORS
   app.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    origin: ['http://192.168.71.77:8080', 'http://localhost:8080/'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
     credentials: true,
   });
 
@@ -25,4 +25,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-
