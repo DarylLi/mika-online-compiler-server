@@ -1,6 +1,7 @@
 export class User {
   uuid: string;
   templateId: string;
+  contentMap: Map<string, string>;
   socketId: string;
   isRequestingHelp: boolean;
   isJoiningHelp: boolean;
@@ -13,5 +14,6 @@ export class User {
     this.isRequestingHelp = false;
     this.isJoiningHelp = false;
     this.connectedAt = new Date();
+    this.contentMap = new Map();
   }
 }

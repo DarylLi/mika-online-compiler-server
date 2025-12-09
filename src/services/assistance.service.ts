@@ -14,9 +14,13 @@ export class AssistanceService {
   createAssistanceRequest(
     requesterUuid: string,
     templateId: string,
-    templateContent: string,
+    templateContent: string
   ): AssistanceRequest {
-    const request = new AssistanceRequest(requesterUuid, templateId, templateContent);
+    const request = new AssistanceRequest(
+      requesterUuid,
+      templateId,
+      templateContent
+    );
     this.assistanceRequests.set(requesterUuid, request);
 
     // 更新用户状态
@@ -34,12 +38,15 @@ export class AssistanceService {
   /**
    * 获取所有协助请求列表
    */
-  getAssistanceRequests(): Array<{ requesterUuid: string; templateId: string }> {
+  getAssistanceRequests(): Array<{
+    requesterUuid: string;
+    templateId: string;
+  }> {
     return Array.from(this.assistanceRequests.values()).map((request) => ({
       requesterUuid: request.requesterUuid,
       templateId: request.templateId,
       templateContent: request.templateContent,
-      show: request.show,
+      show: request.show
     }));
   }
 
@@ -53,9 +60,11 @@ export class AssistanceService {
   /**
    * 通过协作者获取当前的协助请求
    */
-  getAssistanceRequestByHelper(helperUuidd: string): AssistanceRequest | undefined {
+  getAssistanceRequestByHelper(
+    helperUuidd: string
+  ): AssistanceRequest | undefined {
     return Array.from(this.assistanceRequests.values()).filter(
-      (request) => request.helperUuid === helperUuidd,
+      (request) => request.helperUuid === helperUuidd
     )[0];
   }
 

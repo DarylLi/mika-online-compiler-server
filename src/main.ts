@@ -12,9 +12,13 @@ async function bootstrap() {
 
   // 启用 CORS
   app.enableCors({
-    origin: ['http://192.168.71.77:8080', 'http://localhost:8080/', 'https://darylli.github.io/'],
+    origin: [
+      'http://192.168.71.87:8080',
+      'http://localhost:8080/',
+      'https://darylli.github.io/'
+    ],
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
-    credentials: true,
+    credentials: true
   });
 
   const port = process.env.PORT || 3000;

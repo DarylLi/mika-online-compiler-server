@@ -10,7 +10,12 @@ export class UserService {
   /**
    * 创建新用户并返回用户信息
    */
-  createUser(socketId: string): { uuid: string; templateId: string; isRequestingHelp: boolean } {
+  createUser(socketId: string): {
+    uuid: string;
+    templateId: string;
+    contentMap: Map<string, string>;
+    isRequestingHelp: boolean;
+  } {
     const uuid = uuidv4();
     const templateId = '';
     const user = new User(socketId, uuid, templateId);
@@ -20,8 +25,9 @@ export class UserService {
 
     return {
       uuid: user.uuid,
+      contentMap: new Map(),
       templateId: user.templateId,
-      isRequestingHelp: user.isRequestingHelp,
+      isRequestingHelp: user.isRequestingHelp
     };
   }
 

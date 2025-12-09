@@ -11,9 +11,8 @@ import { ContentService } from '../services/content.service';
     UserService,
     AssistanceService,
     MessageService,
-    ContentService,
+    ContentService
   ],
-  exports: [UserService, AssistanceService, MessageService, ContentService],
+  exports: [UserService, AssistanceService, MessageService, ContentService]
 })
 export class EditorModule {}
-

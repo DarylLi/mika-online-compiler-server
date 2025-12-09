@@ -5,7 +5,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   MessageBody,
-  ConnectedSocket,
+  ConnectedSocket
 } from '@nestjs/websockets';
 import { Server, WebSocket } from 'ws';
 import { Logger } from '@nestjs/common';
@@ -16,9 +16,9 @@ import { ContentService } from '../services/content.service';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: '*'
   },
-  transports: ['websocket'],
+  transports: ['websocket']
 })
 export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -31,7 +31,7 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly userService: UserService,
     private readonly assistanceService: AssistanceService,
     private readonly messageService: MessageService,
-    private readonly contentService: ContentService,
+    private readonly contentService: ContentService
   ) {}
 
   /**
@@ -78,7 +78,9 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (user) {
       // 如果用户正在请求协助，结束协助请求
       if (user.isRequestingHelp) {
-        const curService = this.assistanceService.getAssistanceRequest(user.uuid);
+        const curService = this.assistanceService.getAssistanceRequest(
+          user.uuid
+        );
         if (curService.helperUuid) {
           const helpBy = this.userService.getUserByUuid(curService.helperUuid);
           if (helpBy) {
@@ -92,9 +94,13 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // 协作列表重新展示当前协作
         this.assistanceService.showAssistanceRequest(user.uuid);
         // 告知协作者跑路
-        const curService = this.assistanceService.getAssistanceRequestByHelper(user.uuid);
+        const curService = this.assistanceService.getAssistanceRequestByHelper(
+          user.uuid
+        );
         if (curService) {
-          const helpTo = this.userService.getUserByUuid(curService.requesterUuid);
+          const helpTo = this.userService.getUserByUuid(
+            curService.requesterUuid
+          );
           if (helpTo) {
             const curClient = this.clients.get(helpTo.socketId);
             this.sendMessage(curClient, 'helper-leave', { success: true });
@@ -129,6 +135,9 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
       case 'join-assistance':
         this.handleJoinAssistance(client, user, message.data);
         break;
+      case 'send-split-content':
+        this.handleSplitTemplateContent(client, user, message.data);
+        break;
       case 'send-template-content':
         this.handleSendTemplateContent(client, user, message.data);
         break;
@@ -158,13 +167,34 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private handleRequestAssistance(
     client: WebSocket,
     user: any,
-    data: { templateId?: string; templateContent?: string },
+    data: {
+      templateId?: string;
+      chunkContent?: string;
+      chunkFlag: string;
+      currentChunk: number;
+      maxChunk: number;
+    }
   ) {
+    if (data.chunkFlag === 'sending') {
+      user.contentMap.set(`chunk_${data.currentChunk}`, data.chunkContent);
+      return;
+    } else if (data.chunkFlag === 'end') {
+      if (data.maxChunk !== user.contentMap.size) {
+        this.sendMessage(client, 'error', {
+          message: '模版接收失败，请重新请求！'
+        });
+        return;
+      }
+    }
+    let templateContent = '';
+    user.contentMap.forEach((content: string) => {
+      templateContent = templateContent.concat(content);
+    });
     // 创建协助请求
     this.assistanceService.createAssistanceRequest(
       user.uuid,
       data.templateId || user.templateId,
-      data.templateContent || '',
+      templateContent || ''
     );
 
     // 广播更新后的协助列表
@@ -172,13 +202,21 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     this.sendMessage(client, 'assistance-requested', { success: true });
     this.logger.log(`用户 ${user.uuid} 请求协助`);
+    // contentMap 重制
+    user.contentMap = new Map();
   }
 
   /**
    * 加入协助（协助者加入）
    */
-  private handleJoinAssistance(client: WebSocket, helper: any, data: { requesterUuid: string }) {
-    const request = this.assistanceService.getAssistanceRequest(data.requesterUuid);
+  private handleJoinAssistance(
+    client: WebSocket,
+    helper: any,
+    data: { requesterUuid: string }
+  ) {
+    const request = this.assistanceService.getAssistanceRequest(
+      data.requesterUuid
+    );
     if (!request) {
       this.sendMessage(client, 'error', { message: '协助请求不存在' });
       return;
@@ -198,14 +236,14 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // 通知请求者有人加入协助
         this.sendMessage(requesterClient, 'helper-joined', {
           helperUuid: helper.uuid,
-          templateId: request.templateId,
+          templateId: request.templateId
         });
       }
 
       // 通知协助者成功加入
       this.sendMessage(client, 'assistance-joined', {
         requesterUuid: data.requesterUuid,
-        templateId: request.templateId,
+        templateId: request.templateId
       });
 
       this.logger.log(`用户 ${helper.uuid} 加入协助 ${data.requesterUuid}`);
@@ -213,13 +251,66 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
+   * 接受分段传输模板内容
+   * 支持字符串或 JSON 对象/数组
+   */
+  private handleSplitTemplateContent(
+    client: WebSocket,
+    sender: any,
+    data: {
+      chunkFlag: string;
+      currentChunk: number;
+      maxChunk: number;
+      chunkContent: string;
+      toUuid: string;
+      path: string;
+      templateId: string;
+    }
+  ) {
+    const receiver = this.userService.getUserByUuid(data.toUuid);
+    if (!receiver) {
+      this.sendMessage(client, 'error', { message: '接收者不存在' });
+      return;
+    }
+    if (data.chunkFlag === 'sending') {
+      receiver.contentMap.set(`chunk_${data.currentChunk}`, data.chunkContent);
+      return;
+    } else if (data.chunkFlag === 'end') {
+      if (data.maxChunk !== receiver.contentMap.size) {
+        this.sendMessage(client, 'error', {
+          message: '文件内容接收失败，请重新请求！'
+        });
+        return;
+      }
+    }
+    let curContent = '';
+    receiver.contentMap.forEach((content: string) => {
+      curContent = curContent.concat(content);
+    });
+    const receiverClient = this.clients.get(receiver.socketId);
+    if (receiverClient) {
+      this.sendMessage(receiverClient, 'edited-content-update', {
+        content: curContent,
+        templateId: data.templateId,
+        path: data.path
+      });
+    }
+    receiver.contentMap = new Map();
+    this.logger.log(`用户 ${sender.uuid} 向 ${data.toUuid} 发送文件内容`);
+  }
+  /**
    * 发送模板内容（分段传输）
    * 支持字符串或 JSON 对象/数组
    */
   private handleSendTemplateContent(
     client: WebSocket,
     sender: any,
-    data: { content: string | object | any[]; toUuid: string; path: string; templateId: string },
+    data: {
+      content: string | object | any[];
+      toUuid: string;
+      path: string;
+      templateId: string;
+    }
   ) {
     const receiver = this.userService.getUserByUuid(data.toUuid);
     if (!receiver) {
@@ -233,7 +324,7 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.templateId,
       sender.uuid,
       data.toUuid,
-      data.path,
+      data.path
     );
 
     const receiverClient = this.clients.get(receiver.socketId);
@@ -246,13 +337,13 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
           content: chunk.content,
           templateId: chunk.templateId,
           fromUuid: chunk.fromUuid,
-          path: data.path,
+          path: data.path
         });
       });
     }
 
     this.logger.log(
-      `用户 ${sender.uuid} 向 ${data.toUuid} 发送模板内容，共 ${chunks.length} 个分片`,
+      `用户 ${sender.uuid} 向 ${data.toUuid} 发送模板内容，共 ${chunks.length} 个分片`
     );
   }
   /**
@@ -262,7 +353,7 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private handleSwitchContentFile(
     client: WebSocket,
     sender: any,
-    data: { switchFile: string; toUuid: string; templateId: string },
+    data: { switchFile: string; toUuid: string; templateId: string }
   ) {
     const receiver = this.userService.getUserByUuid(data.toUuid);
     if (!receiver) {
@@ -276,10 +367,12 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
         path: data.switchFile,
         templateId: data.templateId,
         fromUuid: sender.uuid,
-        toUuid: data.toUuid,
+        toUuid: data.toUuid
       });
     }
-    this.logger.log(`用户 ${sender.uuid} 切换 ${data.toUuid} 模版文件为 ${data.switchFile}`);
+    this.logger.log(
+      `用户 ${sender.uuid} 切换 ${data.toUuid} 模版文件为 ${data.switchFile}`
+    );
   }
   /**
    * 发送聊天消息
@@ -287,7 +380,7 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private handleSendMessage(
     client: WebSocket,
     sender: any,
-    data: { toUuid: string; content: string; templateId: string },
+    data: { toUuid: string; content: string; templateId: string }
   ) {
     const receiver = this.userService.getUserByUuid(data.toUuid);
     if (!receiver) {
@@ -300,7 +393,7 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
       sender.uuid,
       data.toUuid,
       data.content,
-      data.templateId,
+      data.templateId
     );
 
     const receiverClient = this.clients.get(receiver.socketId);
@@ -310,7 +403,7 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
         fromUuid: sender.uuid,
         content: message.content,
         timestamp: message.timestamp,
-        templateId: message.templateId,
+        templateId: message.templateId
       });
     }
 
@@ -318,7 +411,7 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.sendMessage(client, 'message-sent', {
       toUuid: data.toUuid,
       content: message.content,
-      timestamp: message.timestamp,
+      timestamp: message.timestamp
     });
 
     this.logger.log(`用户 ${sender.uuid} 向 ${data.toUuid} 发送消息`);
@@ -327,7 +420,11 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * 结束协助
    */
-  private handleEndAssistance(client: WebSocket, user: any, data: { requesterUuid: string }) {
+  private handleEndAssistance(
+    client: WebSocket,
+    user: any,
+    data: { requesterUuid: string }
+  ) {
     // 只有请求者可以结束协助
     // if (user.uuid !== data.requesterUuid) {
     //   this.sendMessage(client, 'error', { message: '只有请求者可以结束协助' });
@@ -389,8 +486,8 @@ export class EditorGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.send(
         JSON.stringify({
           event,
-          data,
-        }),
+          data
+        })
       );
     }
   }
