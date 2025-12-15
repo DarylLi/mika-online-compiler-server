@@ -2,11 +2,17 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import { WsAdapter } from '@nestjs/platform-ws';
+import * as fs from 'fs';
 
 async function bootstrap() {
+  const httpsOptions = {
+    key: fs.readFileSync(__dirname + '/alikey/franxxdaryl.site.key'),
+    cert: fs.readFileSync(__dirname + '/alikey/franxxdaryl.site_public.crt')
+  };
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
-
+  const app = await NestFactory.create(AppModule, {
+    httpsOptions
+  });
   // 使用原生 WebSocket 适配器
   app.useWebSocketAdapter(new WsAdapter(app));
 
